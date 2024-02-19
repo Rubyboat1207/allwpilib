@@ -185,7 +185,15 @@ public class PoseEstimator<T extends WheelPositions<T>> {
         new InterpolationRecord(
             getEstimatedPosition(), sample.get().gyroAngle, sample.get().wheelPositions));
 
-    // Step 7: Replay odometry inputs between sample time and latest recorded sample to update the
+    // Step 7: Do a pre-iterative cleanup to insure that the list will not be modified during
+    // execution
+    Double[] keySet =
+        m_poseBuffer.getInternalBuffer().tailMap(timestampSeconds).keySet().toArray(new Double[0]);
+    for (double timestamp : keySet) {
+      m_poseBuffer.cleanUp(timestamp);
+    }
+
+    // Step 8: Replay odometry inputs between sample time and latest recorded sample to update the
     // pose buffer and correct odometry.
     for (Map.Entry<Double, InterpolationRecord> entry :
         m_poseBuffer.getInternalBuffer().tailMap(timestampSeconds).entrySet()) {

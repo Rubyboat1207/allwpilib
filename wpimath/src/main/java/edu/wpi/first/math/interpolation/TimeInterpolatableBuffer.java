@@ -78,7 +78,7 @@ public final class TimeInterpolatableBuffer<T> {
    *
    * @param time The current timestamp.
    */
-  private void cleanUp(double time) {
+  public void cleanUp(double time) {
     while (!m_pastSnapshots.isEmpty()) {
       var entry = m_pastSnapshots.firstEntry();
       if (time - entry.getKey() >= m_historySize) {
