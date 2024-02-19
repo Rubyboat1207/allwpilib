@@ -5,6 +5,10 @@
 package edu.wpi.first.math.interpolation;
 
 import edu.wpi.first.math.MathUtil;
+
+import java.util.ConcurrentModificationException;
+import java.util.HashSet;
+import java.util.List;
 import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.TreeMap;
@@ -21,6 +25,7 @@ public final class TimeInterpolatableBuffer<T> {
   private final double m_historySize;
   private final Interpolator<T> m_interpolatingFunc;
   private final NavigableMap<Double, T> m_pastSnapshots = new TreeMap<>();
+  private final HashSet<Double> m_deferredCleanupTimes = new HashSet<Double>();
 
   private TimeInterpolatableBuffer(Interpolator<T> interpolateFunction, double historySizeSeconds) {
     this.m_historySize = historySizeSeconds;
@@ -69,7 +74,12 @@ public final class TimeInterpolatableBuffer<T> {
    * @param sample The sample object.
    */
   public void addSample(double timeSeconds, T sample) {
-    cleanUp(timeSeconds);
+    try {
+      cleanUp(timeSeconds);
+    }catch(ConcurrentModificationException ignored) {
+      deferCleanUp(timeSeconds);
+    }
+    
     m_pastSnapshots.put(timeSeconds, sample);
   }
 
@@ -89,9 +99,25 @@ public final class TimeInterpolatableBuffer<T> {
     }
   }
 
+  private void deferCleanUp(double time) {
+    m_deferredCleanupTimes.add(time);
+  }
+
+  private void cleanUpPreviouslyDeferredTimes() {
+    if(m_deferredCleanupTimes.size() == 0) {
+      return;
+    }
+
+    for(double deferredTime : m_deferredCleanupTimes) {
+      cleanUp(deferredTime);
+    }
+    m_deferredCleanupTimes.clear();
+  }
+
   /** Clear all old samples. */
   public void clear() {
     m_pastSnapshots.clear();
+    m_deferredCleanupTimes.clear();
   }
 
   /**
@@ -104,6 +130,8 @@ public final class TimeInterpolatableBuffer<T> {
     if (m_pastSnapshots.isEmpty()) {
       return Optional.empty();
     }
+
+    cleanUpPreviouslyDeferredTimes();
 
     // Special case for when the requested time is the same as a sample
     var nowEntry = m_pastSnapshots.get(timeSeconds);
@@ -140,6 +168,7 @@ public final class TimeInterpolatableBuffer<T> {
    * @return The internal sample buffer.
    */
   public NavigableMap<Double, T> getInternalBuffer() {
+    cleanUpPreviouslyDeferredTimes();
     return m_pastSnapshots;
   }
 }
